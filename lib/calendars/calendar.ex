@@ -21,9 +21,9 @@ defmodule EnochEx.Calendar do
   @doc """
   Start the calendar after initializing if it hasn't yet been created
   """
-  def start_calendar(), do: start_calendar({@default_lat, @default_long})
+  def start_calendar(options \\ []), do: start_calendar({@default_lat, @default_long}, options)
 
-  def start_calendar({latitude, longitude}) do
+  def start_calendar({latitude, longitude}, options) do
     tz = get_approximate_tz(latitude, longitude)
     now = Timex.now(tz)
 
@@ -47,7 +47,7 @@ defmodule EnochEx.Calendar do
         week_day: 4,
         month_day: 1,
         year_day: 1,
-        event_day: nil,
+        event_day: [],
         hour: 0,
         minute: 0,
         month: 1,
@@ -62,7 +62,7 @@ defmodule EnochEx.Calendar do
     }
     |> Gregorian.calendar_now_to_enoch_cdt()
     |> EnochEx.Calendar.Application.add_child()
-    |> Job.if_new_calendar_start_ticking(sunrise_hour)
+    |> Job.if_new_calendar_start_ticking(sunrise_hour, options)
   end
 
   @doc """
@@ -72,7 +72,7 @@ defmodule EnochEx.Calendar do
   """
   def now(sunrise_hour) do
     case Registry.lookup(CalendarRegistry, "calendar:#{sunrise_hour}") do
-      [] -> {}
+      [] -> nil
       [{pid, _}] -> GenServer.call(pid, :now)
     end
   end

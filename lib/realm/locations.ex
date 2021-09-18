@@ -8,4 +8,6 @@ defmodule EnochEx.Locations do
   @city_approx %{
     "seattle" => {47.526212840200216, -122.10657286376953}
   }
+
+  def city_coords(city), do: Map.get(@city_approx, city)
 end

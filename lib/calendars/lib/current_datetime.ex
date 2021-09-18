@@ -104,7 +104,7 @@ defmodule EnochEx.Calendar.CurrentDatetime do
       "month_day" => cdt.month_day,
       "month_day_postfix" => month_postfix(cdt),
       "clock" => clock(cdt),
-      "year_day" => cdt.year_day
+      "year_day" => cdt.year_day,
       "holidays" => Date.special_days(cdt),
       "parts_day" => cdt.parts_day,
       "parts_night" => cdt.parts_night,

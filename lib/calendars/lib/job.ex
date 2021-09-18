@@ -5,16 +5,18 @@ defmodule EnochEx.Calendar.Job do
   import Crontab.CronExpression
 
 
-  def if_new_calendar_start_ticking({:error, {:already_started, _pid}}, sunrise_hour) do
+  def if_new_calendar_start_ticking({:error, {:already_started, _pid}}, sunrise_hour, options) do
     Registry.lookup(CalendarRegistry, "calendar:#{sunrise_hour}")
     |> List.first()
     |> elem(0)
+    |> process_options(options)
   end
 
-  def if_new_calendar_start_ticking({:ok, _}, sunrise_hour) do
+  def if_new_calendar_start_ticking({:ok, _}, sunrise_hour, options) do
     Registry.lookup(CalendarRegistry, "calendar:#{sunrise_hour}")
     |> List.first()
     |> elem(0)
+    |> process_options(options)
     |> start_calendar_job(sunrise_hour)
   end
 
@@ -30,4 +32,11 @@ defmodule EnochEx.Calendar.Job do
     end)
     |> EnochEx.Scheduler.add_job()
   end
+
+  defp process_options(pid, [{:tick_callback, callback}|t]) do
+    _ = GenServer.call(pid, {:update_tick_callback, callback})
+    process_options(pid, t)
+  end
+
+  defp process_options(pid, _), do: pid
 end

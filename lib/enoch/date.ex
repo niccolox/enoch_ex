@@ -50,14 +50,14 @@ defmodule EnochEx.Enoch.Date do
   def special_days(%CDT{} = cdt), do: special_days("week_day", cdt, [])
 
   def special_days("week_day", %CDT{week_day: wd} = cdt, acc) do
-    case Map.get(@holdays["week_day"], wd) do
+    case Map.get(@holidays["week_day"], wd) do
       nil -> special_days("year_day", cdt, acc)
       holiday -> special_days("year_day", cdt, [holiday|acc])
     end
   end
 
-  def special_days("year_day", %CDT{year_day: yd} = cdt, acc) do
-    case Map.get(@holdays["year_day"], yd) do
+  def special_days("year_day", %CDT{year_day: yd}, acc) do
+    case Map.get(@holidays["year_day"], yd) do
       nil -> acc
       holiday -> [holiday|acc]
     end
