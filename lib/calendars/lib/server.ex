@@ -6,15 +6,16 @@ defmodule EnochEx.Calendar.Server do
   use GenServer
 
   alias EnochEx.Calendar.Model.Calendar, as: Cal
+  alias EnochEx.Calendar.Model.CurrentDatetime, as: CDT
   alias EnochEx.Calendar.CurrentDatetime
   alias EnochEx.Enoch.Gregorian
 
 
-  def start_link(%Cal{sunrise_hour: sunrise_hour} = calendar) do
+  def start_link(%Cal{city: city} = calendar) do
     GenServer.start_link(
       __MODULE__,
       calendar,
-      name: {:via, Registry, {CalendarRegistry, "calendar:#{sunrise_hour}"}},
+      name: {:via, Registry, {CalendarRegistry, "calendar:#{city}"}},
       timeout: :infinity
     )
   end
@@ -23,12 +24,14 @@ defmodule EnochEx.Calendar.Server do
   def init(calendar), do: {:ok, calendar}
 
   @impl true
-  def handle_call(:tick, _from, %Cal{current_datetime: cdt, tick_callback: tick_callback} = state) do
+  def handle_call(:tick, _from, %Cal{city: city, current_datetime: cdt, tick_callback: tick_callback} = state) do
     IO.inspect("TICK")
-    IO.inspect(tick_callback)
+    IO.inspect(cdt)
+    IO.inspect(city)
     cdt
     |> CurrentDatetime.tick()
     |> spring_equinox_check(state)
+    |> true_noon_update(state)
     |> callback_if_set(tick_callback)
     |> update_state_and_reply(:current_datetime, state)
   end
@@ -48,7 +51,15 @@ defmodule EnochEx.Calendar.Server do
 
   # PRIVATE FUNCTIONS
   ###################
-  defp spring_equinox_check(%{year_day: 364} = cdt, %Cal{coord: coords}) do
+  defp true_noon_update(%{year_day: yd, true_noon: {yd_tn, _}} = cdt, %Cal{} = cal) when yd_tn < yd do
+    true_noon = CurrentDatetime.true_noon(cal)
+
+    %{cdt | true_noon: {yd, true_noon}}
+  end
+
+  defp true_noon_update(cdt, _), do: cdt
+
+  defp spring_equinox_check(%CDT{year_day: 364} = cdt, %Cal{coord: coords}) do
     tz = EnochEx.Calendar.get_approximate_tz(coords["lat"], coords["long"])
     now = Timex.now(tz)
 
@@ -84,7 +95,6 @@ defmodule EnochEx.Calendar.Server do
   end
 
   defp callback_if_set(cdt, tick_callback) when is_function(tick_callback) do
-    IO.inspect("TICK CALLBACK")
     _ = tick_callback.(cdt)
     cdt
   end

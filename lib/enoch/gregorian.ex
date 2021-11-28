@@ -25,7 +25,7 @@ defmodule EnochEx.Enoch.Gregorian do
       equinox_delta = Timex.diff(vernal_equinox, now, :days) - 1
 
       cdt
-      |> Date.increment_year(-1)
+      |> Date.increment_year(-1) # Should be CDT module?
       |> update_cdt(cal)
       |> inc_days(equinox_delta)
       |> calendar_now_to_enoch_time()
@@ -36,10 +36,10 @@ defmodule EnochEx.Enoch.Gregorian do
     end
   end
 
-  def calendar_now_to_enoch_time(%Cal{timezone: tz, sunrise: sunrise, sunrise_hour: sunrise_hour} = cal) do
+  def calendar_now_to_enoch_time(%Cal{timezone: tz, current_datetime: %{gregorian_sunrise: sunrise}} = cal) do
     now = Timex.now(tz)
 
-    minutes = ((now.hour - sunrise_hour) * 60) + (now.minute - sunrise.minute)
+    minutes = ((now.hour - sunrise.hour) * 60) + (now.minute - sunrise.minute)
 
     inc_time(cal, minutes)
   end
@@ -90,6 +90,8 @@ defmodule EnochEx.Enoch.Gregorian do
     |> inc_days(num_days - 1)
   end
 
+  # This first clause deserves an error message
+  defp inc_time(%Cal{} = cal, minutes) when minutes < 0, do: cal
   defp inc_time(%Cal{} = cal, 0), do: cal
 
   defp inc_time(%Cal{current_datetime: cdt} = cal, minutes) do

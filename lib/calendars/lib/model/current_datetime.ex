@@ -12,6 +12,7 @@ defmodule EnochEx.Calendar.Model.CurrentDatetime do
     month: 1,
     parts_day: 10,
     parts_night: 8,
-    sunrise_hour: 6,
-    sunrise_minute: 0]
+    gregorian_sunrise: nil,
+    true_noon: {0, {4, 40}},
+    coord: %{"lat" => nil, "long" => nil}]
 end

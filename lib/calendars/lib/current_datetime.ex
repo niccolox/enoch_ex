@@ -3,31 +3,51 @@ defmodule EnochEx.Calendar.CurrentDatetime do
   The date and clock, ticking minute by minute, returning the advanced current datetime. Note that this module
   knows only to move time forward, minute by minute, it has no awareness of the equinox (handled upstream of this).
 
-  day: 1,
-  week_day: 4,
-  hour: 0,
-  minute: 0,
-  year_day: 1,
-  parts_day: 10,
-  parts_night: 8,
-  season: "spring",
-  sign: "aries",
-  year: 2021,
-  month: 1,
-  gate: 4
+  [
+    day: 1,
+    week: 1,
+    week_day: 4,
+    month_day: 1,
+    year_day: 1,
+    event_day: [],
+    hour: 0,
+    minute: 0,
+    year: 2021,
+    month: 1,
+    parts_day: 10,
+    parts_night: 8,
+    gregorian_sunrise: nil,
+    true_noon: {0, {4, 40}},
+    coord: %{"lat" => nil, "long" => nil}
+  ]
   """
-  import EnochEx.Calendar.Guards, only: [not_equinox_month?: 1, descrease_sunrise_minute?: 1]
+  import EnochEx.Calendar.Guards, only: [not_equinox_month?: 1]
+  alias EnochEx.Calendar.Model.Calendar
   alias EnochEx.Calendar.Model.CurrentDatetime, as: CDT
   alias EnochEx.Enoch.Date
+  alias EnochEx.Enoch.Gregorian
 
   @doc """
   Tick a minute! Increment hour if it is time, and increment day.. if it is time.
   """
-  # During the great sign spring equinox hours will tick until upstream notes that sunrise past the equinox has passed
-  def tick(%CDT{year_day: 364, minute: m, hour: 17, sunrise_minute: sm} = cdt) when m == (80 - sm), do: cdt |> Map.put(:minute, 0) |> Map.put(:hour, 18) |> inc_day()
-  def tick(%CDT{year_day: 364, minute: 79, hour: 17} = cdt), do: cdt |> Map.put(:minute, 0) |> Map.put(:hour, 18) |> inc_day()
+  # During the great sign spring equinox mins/hours will tick until the event of the sunrise following the equinox
+  # has been placed on the cdt
+  def tick(%CDT{year_day: 364} = cdt), do: inc_day(cdt)
 
-  def tick(%CDT{minute: m, hour: 17, sunrise_minute: sm} = cdt) when m == (80 - sm), do: inc_day(cdt) |> Map.put(:minute, 0) |> Map.put(:hour, 0)
+  def tick(%CDT{minute: 39, hour: 17, month_day: 30, month: m} = cdt) when not_equinox_month?(m) do
+    # Portal update, sunrise is expanding 40 minutes in either direction
+    cdt
+    |> inc_day()
+    |> Map.put(:minute, 0)
+    |> Map.put(:hour, 0)
+  end
+  def tick(%CDT{minute: 39, hour: 17, month_day: 31} = cdt) do
+    # Portal update, sunrise is expanding 40 minutes in either direction
+    cdt
+    |> inc_day()
+    |> Map.put(:minute, 0)
+    |> Map.put(:hour, 0)
+  end
   def tick(%CDT{minute: 79, hour: 17} = cdt), do: inc_day(cdt) |> Map.put(:minute, 0) |> Map.put(:hour, 0)
   def tick(%CDT{minute: 79, hour: hour} = cdt), do: %{cdt | minute: 0, hour: hour + 1}
   def tick(%CDT{minute: min} = cdt), do: %{cdt | minute: min + 1}
@@ -39,20 +59,13 @@ defmodule EnochEx.Calendar.CurrentDatetime do
   def tick_spring_equinox(%CDT{minute: 79, hour: h} = cdt), do: %{cdt | minute: 0, hour: h + 1}
   def tick_spring_equinox(%CDT{minute: min} = cdt), do: %{cdt | minute: min + 1}
 
-  def inc_day(%CDT{day: d, month_day: md} = cdt) when descrease_sunrise_minute?(md) do
-    cdt
-    |> inc_week()
-    |> inc_month()
-    |> inc_year()
-    |> Map.put(:day, d + 1)
-    |> Map.put(:sunrise_minute, trunc(md / 7 * 20))
-  end
-  def inc_day(%CDT{year_day: 364, event_day: events} = cdt) do
-    case events do
-      [] -> 
-        cdt
-      ["New Years Day"|_] ->
-        # Note on equinox the hours tick continuously
+  def inc_day(%CDT{year_day: 364} = cdt) do
+    case cdt do
+      %{events: ["New Years Day"|_], coord: %{"lat" => lat, "long" => long}} ->
+        tz = EnochEx.Calendar.get_approximate_tz(lat, long)
+        now = Timex.now(tz)
+        {:ok, sunrise} = Astro.sunrise({long, lat}, now)
+
         cdt
         |> inc_week()
         |> inc_month()
@@ -61,14 +74,26 @@ defmodule EnochEx.Calendar.CurrentDatetime do
         |> Map.put(:week_day, 4)
         |> Map.put(:minute, 0)
         |> Map.put(:hour, 0)
+        |> Map.put(:gregorian_sunrise, sunrise)
+      %{events: _, minute: 79, hour: h} ->
+        %{cdt | minute: 0, hour: h + 1}
+
+      %{events: _, minute: m} ->
+        %{cdt | minute: m + 1}
     end
   end
-  def inc_day(%CDT{day: d} = cdt) do
+
+  def inc_day(%CDT{day: d, coord: %{"lat" => lat, "long" => long}} = cdt) do
+    tz = EnochEx.Calendar.get_approximate_tz(lat, long)
+    now = Timex.now(tz)
+    {:ok, sunrise} = Astro.sunrise({long, lat}, now)
+
     cdt
     |> inc_week()
     |> inc_month()
     |> inc_year()
     |> Map.put(:day, d + 1)
+    |> Map.put(:gregorian_sunrise, sunrise)
   end
 
   def inc_week(%CDT{year_day: 364} = cdt), do: %{cdt | week_day: 4, week: 1}
@@ -104,25 +129,58 @@ defmodule EnochEx.Calendar.CurrentDatetime do
       "month_day" => cdt.month_day,
       "month_day_postfix" => month_postfix(cdt),
       "clock" => clock(cdt),
+      "true_noon" => true_noon_clock(cdt),
       "year_day" => cdt.year_day,
       "holidays" => Date.special_days(cdt),
       "parts_day" => cdt.parts_day,
-      "parts_night" => cdt.parts_night,
-      "sunrise_hour" => cdt.sunrise_hour
+      "parts_night" => cdt.parts_night
     }
+  end
+
+  def pretty(_), do: nil
+
+  @doc """
+  Create a new CurrentDateTime model for the start of a new year, for the given Calendar
+  """
+  def initialize(%Calendar{coord: coord, spring_sunrise: sunrise, current_datetime: cdt} = cal) do
+    {_, _, _, {parts_day, parts_night}} = EnochEx.Enoch.Date.get_month_info("spring")
+
+    true_noon = true_noon(cal)
+    
+    cal
+    |> Map.put(:current_datetime, %{cdt | true_noon: {1, true_noon}, 
+      parts_day: parts_day, 
+      parts_night: parts_night,
+      coord: coord,
+      gregorian_sunrise: sunrise})
+    |> Gregorian.calendar_now_to_enoch_cdt()
+    |> Map.get(:current_datetime)
+  end
+
+  @doc """
+  Return the Enoch time at which the sun reaches it's halfway point for the current day.
+
+  # TODO: need to add option to get EXACT instead of approximate. We are using portal
+  # math only currently (sunrise after equinox and then portal hour additions)
+
+  @returns {hour of current day of true noon, minute of current day of true noon}
+  """
+  def true_noon(%Calendar{current_datetime: %CDT{parts_day: parts_day}}) do  
+    # Take daylight hours portal and cut in half
+    hours_after_sunrise = div(parts_day, 2)
+    mins_after_sunrise = round(((parts_day / 2) - hours_after_sunrise) * 80)
+
+    {hours_after_sunrise, mins_after_sunrise}
   end
 
   # PRIVATE FUNCTIONS
   ###################
-  defp update_day_parts(%CDT{sunrise_hour: curr_sh, parts_day: curr_parts_day, month: month_num} = cdt) do
+  defp update_day_parts(%CDT{month: month_num} = cdt) do
     parts = Date.get_month_info_by_number(month_num) |> elem(3)
     parts_day = parts |> elem(0)
     parts_night = parts |> elem(1)
-    sunrise_hour = cond do
-      curr_parts_day > parts_day -> curr_sh + 1
-      true -> curr_sh - 1
-    end
-    %{cdt | parts_day: parts_day, parts_night: parts_night, sunrise_hour: sunrise_hour, sunrise_minute: 0}
+    
+    %{cdt | parts_day: parts_day, parts_night: parts_night}
   end
 
   defp month_postfix(%CDT{month_day: md}) when md < 21 and md > 3, do: "th"
@@ -142,4 +200,6 @@ defmodule EnochEx.Calendar.CurrentDatetime do
   defp clock(hour, minute, ""), do: clock(hour, minute, "#{hour}")
   defp clock(_, minute, clock) when minute < 10, do: "#{clock}:0#{minute}"
   defp clock(_, minute, clock), do: "#{clock}:#{minute}"
+
+  defp true_noon_clock(%CDT{true_noon: {_, {hour, minute}}}), do: clock(hour, minute, "")
 end

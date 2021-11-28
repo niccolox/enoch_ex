@@ -68,9 +68,12 @@ defmodule EnochEx.Enoch.Date do
 
   def increment_year(%CDT{year: year} = cdt, amt), do: %{cdt | year: year + amt}
 
+  @doc """
+  Get the rounded gregorian sunrise hour
+  """
   def get_sunrise_hour(sunrise) do
     cond do
-      sunrise.minute >= 40 -> sunrise.hour + 1
+      sunrise.minute >= 30 -> sunrise.hour + 1
       true -> sunrise.hour
     end
   end
