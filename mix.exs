@@ -24,7 +24,7 @@ defmodule EnochEx.MixProject do
       {:timex, "~> 3.7"},
       {:ip2location, github: "nazipov/ip2location-elixir"},
       #{:wheretz, "~> 0.1.16"},
-      {:wheretz, github: "MartinElvar/wheretz"},
+      {:wheretz, github: "niccolox/wheretz"},
       {:quantum, "~> 2.4"}
     ]
   end
