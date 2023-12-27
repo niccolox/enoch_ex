@@ -20,7 +20,7 @@ defmodule EnochEx.MixProject do
 
   defp deps do
     [
-      {:astro, "~> 0.4.0"},
+      {:astro, "~> 0.10.0"},
       {:timex, "~> 3.7"},
       {:ip2location, github: "nazipov/ip2location-elixir"},
       #{:wheretz, "~> 0.1.16"},
